@@ -196,6 +196,12 @@ func (p *powerline) bgColor(code uint8) string {
 	return p.color("48", code)
 }
 
+// clearToEol returns the "erase from cursor to end of line" control sequence
+// (CSI K), wrapped in the shell's non-printing markers.
+func (p *powerline) clearToEol() string {
+	return fmt.Sprintf(p.shell.ColorTemplate, "[K")
+}
+
 func (p *powerline) appendSegment(origin string, segment pwl.Segment) {
 	if segment.Foreground == segment.Background && segment.Background == 0 {
 		segment.Background = p.theme.DefaultBg
@@ -379,6 +385,18 @@ func (p *powerline) drawRow(rowNum int, buffer *bytes.Buffer) {
 			buffer.WriteString(segment.Separator)
 		}
 		buffer.WriteString(p.reset)
+	}
+
+	// A row wider than the terminal soft-wraps. When that wrap happens on the
+	// last screen line, the terminal scrolls and fills the freshly exposed
+	// line with the background colour that is active at that moment (the
+	// "background colour erase" behaviour of xterm, VTE, Alacritty, ...).
+	// The remainder of the wrapped line then keeps the colour of whichever
+	// segment straddled the wrap, e.g. the red exit-code segment. Now that
+	// all colours have been reset, erase from the cursor to the end of the
+	// line so the wrapped row ends with the terminal's default background.
+	if !p.isRightPrompt() {
+		buffer.WriteString(p.clearToEol())
 	}
 
 	// Append padding before cursor for left-aligned prompts
